@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -107,9 +108,38 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"token": token})
 }
 
+func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+
+		if authHeader == "" {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing token"})
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
+			return s.secret, nil
+		})
+
+		if err != nil || !token.Valid {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+			return
+		}
+
+		next(w, r)
+	}
+}
+
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"status": "running",
+	})
+}
+
+func (s *Server) profile(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "welcome to profile",
 	})
 }
 
@@ -146,6 +176,7 @@ func main() {
 	mux.HandleFunc("/health", server.health)
 	mux.HandleFunc("/signup", server.signup)
 	mux.HandleFunc("/login", server.login)
+	mux.HandleFunc("/profile", server.authMiddleware(server.profile))
 
 	log.Println("Server running on : 8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
