@@ -55,10 +55,15 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	role := "user"
+	if req.Username == "admin" {
+		role = "admin"
+	}
+
 	user := User{
 		Username: req.Username,
 		Password: string(hashedPassword),
-		Role:     "user",
+		Role:     role,
 	}
 
 	s.users[req.Username] = user
@@ -127,6 +132,11 @@ func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		claims := token.Claims.(jwt.MapClaims)
+
+		r.Header.Set("username", claims["username"].(string))
+		r.Header.Set("role", claims["role"].(string))
+
 		next(w, r)
 	}
 }
@@ -140,6 +150,19 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 func (s *Server) profile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "welcome to profile",
+	})
+}
+
+func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
+	role := r.Header.Get("role")
+
+	if role != "admin" {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "welcome admin",
 	})
 }
 
@@ -177,6 +200,7 @@ func main() {
 	mux.HandleFunc("/signup", server.signup)
 	mux.HandleFunc("/login", server.login)
 	mux.HandleFunc("/profile", server.authMiddleware(server.profile))
+	mux.HandleFunc("/admin", server.authMiddleware(server.admin))
 
 	log.Println("Server running on : 8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
