@@ -4,9 +4,62 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
-type Server struct{}
+type User struct {
+	Username string `json:"username"`
+	Password string `json:"-"`
+	Role     string `json:"role"`
+}
+
+type Server struct {
+	users map[string]User
+}
+
+func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	if req.Username == "" || req.Password == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username and password are required"})
+		return
+	}
+
+	if _, exists := s.users[req.Username]; exists {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "user already exists"})
+		return
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not hash password"})
+		return
+	}
+
+	user := User{
+		Username: req.Username,
+		Password: string(hashedPassword),
+		Role:     "user",
+	}
+
+	s.users[req.Username] = user
+
+	writeJSON(w, http.StatusCreated, map[string]string{"message": "user created"})
+}
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
@@ -21,11 +74,14 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 }
 
 func main() {
-	server := &Server{}
+	server := &Server{
+		users: make(map[string]User),
+	}
 
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", server.health)
+	mux.HandleFunc("/signup", server.signup)
 
 	log.Println("Server running on : 8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
