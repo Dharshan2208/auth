@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -19,6 +20,7 @@ type Server struct {
 }
 
 func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
@@ -58,7 +60,41 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 
 	s.users[req.Username] = user
 
+	log.Printf("[SIGNUP] SUCCESS | Username: %s | IP: %s | Time: %v", req.Username, r.RemoteAddr, time.Since(start))
 	writeJSON(w, http.StatusCreated, map[string]string{"message": "user created"})
+}
+
+func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	user, exists := s.users[req.Username]
+	if !exists {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid creds"})
+		return
+	}
+
+	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid creds"})
+		return
+	}
+
+	log.Printf("[LOGIN]  SUCCESS | Username: %s | Role: %s | IP: %s | Time: %v", req.Username, user.Role, r.RemoteAddr, time.Since(start))
+	writeJSON(w, http.StatusOK, map[string]string{"message": "login successful"})
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
@@ -82,6 +118,7 @@ func main() {
 
 	mux.HandleFunc("/health", server.health)
 	mux.HandleFunc("/signup", server.signup)
+	mux.HandleFunc("/login", server.login)
 
 	log.Println("Server running on : 8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
