@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -16,7 +17,8 @@ type User struct {
 }
 
 type Server struct {
-	users map[string]User
+	users  map[string]User
+	secret []byte
 }
 
 func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +96,15 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("[LOGIN]  SUCCESS | Username: %s | Role: %s | IP: %s | Time: %v", req.Username, user.Role, r.RemoteAddr, time.Since(start))
-	writeJSON(w, http.StatusOK, map[string]string{"message": "login successful"})
+	// writeJSON(w, http.StatusOK, map[string]string{"message": "login successful"})
+
+	token, err := s.generateJWT(user)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not generate token"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"token": token})
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
@@ -109,9 +119,26 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	json.NewEncoder(w).Encode(data)
 }
 
+func (s *Server) generateJWT(user User) (string, error) {
+	claims := jwt.MapClaims{
+		"username": user.Username,
+		"role":     user.Role,
+		"exp":      time.Now().Add(2 * time.Minute).Unix(),
+	}
+
+	token := jwt.NewWithClaims(
+		jwt.SigningMethodHS256,
+		claims,
+	)
+
+	// this creates cryptographic proof
+	return token.SignedString(s.secret)
+}
+
 func main() {
 	server := &Server{
-		users: make(map[string]User),
+		users:  make(map[string]User),
+		secret: []byte("for-now-random-key-hardcoded"),
 	}
 
 	mux := http.NewServeMux()
