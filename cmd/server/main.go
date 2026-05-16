@@ -9,6 +9,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/Dharshan2208/auth/internal/auth"
+	"github.com/Dharshan2208/auth/internal/config"
 	"github.com/Dharshan2208/auth/internal/middleware"
 	"github.com/Dharshan2208/auth/internal/models"
 	"github.com/Dharshan2208/auth/internal/storage"
@@ -261,16 +262,16 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 }
 
 func main() {
-	store, err := storage.New(
-		"postgres://authuser:password@localhost:5432/authdb",
-	)
+	cfg := config.Load()
+
+	store, err := storage.New(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	server := &Server{
 		store:  store,
-		secret: []byte("for-now-random-key-hardcoded"),
+		secret: []byte(cfg.JWTSecret),
 	}
 
 	mux := http.NewServeMux()
@@ -286,6 +287,6 @@ func main() {
 
 	loggedMux := middleware.Logging(middleware.CORS(mux))
 
-	log.Println("Server running on : 8080")
-	log.Fatal(http.ListenAndServe(":8080", loggedMux))
+	log.Println("Server running on :",cfg.Port)
+	log.Fatal(http.ListenAndServe(":"+cfg.Port, loggedMux))
 }
