@@ -18,6 +18,7 @@ import (
 type Server struct {
 	secret []byte
 	store  *storage.Store
+	cfg    *config.Config
 }
 
 func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
@@ -103,13 +104,13 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[LOGIN]  SUCCESS | Username: %s | Role: %s | IP: %s | Time: %v", req.Username, user.Role, r.RemoteAddr, time.Since(start))
 
-	accessToken, err := auth.GenerateAccessToken(user, s.secret)
+	accessToken, err := auth.GenerateAccessToken(user, s.secret, s.cfg.AccessTokenTTL)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not generate token"})
 		return
 	}
 
-	refreshToken, err := auth.GenerateRefreshToken(user, s.secret)
+	refreshToken, err := auth.GenerateRefreshToken(user, s.secret, s.cfg.RefreshTokenTTL)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not generate token"})
 		return
@@ -117,7 +118,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 	hashed := auth.HashToken(refreshToken)
 
-	err = s.store.SaveRefreshToken(user.ID, hashed, time.Now().Add(7*24*time.Hour))
+	err = s.store.SaveRefreshToken(user.ID, hashed, time.Now().Add(s.cfg.RefreshTokenTTL))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save refresh token"})
 		return
@@ -204,7 +205,7 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 
 	_ = s.store.DeleteRefreshToken(hashed)
 
-	newRefreshToken, err := auth.GenerateRefreshToken(user, s.secret)
+	newRefreshToken, err := auth.GenerateRefreshToken(user, s.secret, s.cfg.AccessTokenTTL)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "token generation failed"})
 		return
@@ -212,13 +213,13 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 
 	newHash := auth.HashToken(newRefreshToken)
 
-	err = s.store.SaveRefreshToken(user.ID, newHash, time.Now().Add(7*24*time.Hour))
+	err = s.store.SaveRefreshToken(user.ID, newHash, time.Now().Add(s.cfg.RefreshTokenTTL))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save refresh token"})
 		return
 	}
 
-	accessToken, err := auth.GenerateAccessToken(user, s.secret)
+	accessToken, err := auth.GenerateAccessToken(user, s.secret, s.cfg.AccessTokenTTL)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "token generation failed"})
 		return
@@ -271,6 +272,7 @@ func main() {
 
 	server := &Server{
 		store:  store,
+		cfg:    cfg,
 		secret: []byte(cfg.JWTSecret),
 	}
 
@@ -287,6 +289,6 @@ func main() {
 
 	loggedMux := middleware.Logging(middleware.CORS(mux))
 
-	log.Println("Server running on :",cfg.Port)
+	log.Println("Server running on :", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, loggedMux))
 }

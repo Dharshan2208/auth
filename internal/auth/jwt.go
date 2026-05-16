@@ -7,11 +7,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func GenerateAccessToken(user models.User, secret []byte) (string, error) {
+func GenerateAccessToken(user models.User, secret []byte, ttl time.Duration) (string, error) {
 	claims := jwt.MapClaims{
 		"username": user.Username,
 		"role":     user.Role,
-		"exp":      time.Now().Add(10 * time.Minute).Unix(),
+		"exp":      time.Now().Add(ttl).Unix(),
 	}
 
 	token := jwt.NewWithClaims(
@@ -22,11 +22,11 @@ func GenerateAccessToken(user models.User, secret []byte) (string, error) {
 	return token.SignedString(secret)
 }
 
-func GenerateRefreshToken(user models.User, secret []byte) (string, error) {
+func GenerateRefreshToken(user models.User, secret []byte, ttl time.Duration) (string, error) {
 	claims := jwt.MapClaims{
 		"username": user.Username,
 		"type":     "refresh",
-		"exp":      time.Now().Add(7 * 24 * time.Hour).Unix(),
+		"exp":      time.Now().Add(ttl).Unix(),
 	}
 
 	token := jwt.NewWithClaims(
