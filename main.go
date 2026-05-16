@@ -18,8 +18,9 @@ type User struct {
 }
 
 type Server struct {
-	users  map[string]User
-	secret []byte
+	users         map[string]User
+	secret        []byte
+	refreshTokens map[string]string
 }
 
 func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
@@ -104,13 +105,74 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[LOGIN]  SUCCESS | Username: %s | Role: %s | IP: %s | Time: %v", req.Username, user.Role, r.RemoteAddr, time.Since(start))
 	// writeJSON(w, http.StatusOK, map[string]string{"message": "login successful"})
 
-	token, err := s.generateJWT(user)
+	accessToken, err := s.generateJWT(user)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not generate token"})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"token": token})
+	refreshToken, err := s.generateRefreshToken(user)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not generate token"})
+		return
+	}
+
+	s.refreshTokens[refreshToken] = user.Username
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	})
+}
+
+func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	token, err := jwt.Parse(req.RefreshToken,
+		func(token *jwt.Token) (any, error) {
+			return s.secret, nil
+		},
+	)
+
+	if err != nil || !token.Valid {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid refresh token"})
+		return
+	}
+
+	claims := token.Claims.(jwt.MapClaims)
+
+	if claims["type"] != "refresh" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "wrong token type"})
+		return
+	}
+
+	username, exists := s.refreshTokens[req.RefreshToken]
+	if !exists {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "refresh token revoked"})
+		return
+	}
+
+	user := s.users[username]
+
+	accessToken, err := s.generateJWT(user)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "token generation failed"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"access_token": accessToken})
 }
 
 func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
@@ -176,7 +238,7 @@ func (s *Server) generateJWT(user User) (string, error) {
 	claims := jwt.MapClaims{
 		"username": user.Username,
 		"role":     user.Role,
-		"exp":      time.Now().Add(2 * time.Minute).Unix(),
+		"exp":      time.Now().Add(10 * time.Minute).Unix(),
 	}
 
 	token := jwt.NewWithClaims(
@@ -188,10 +250,26 @@ func (s *Server) generateJWT(user User) (string, error) {
 	return token.SignedString(s.secret)
 }
 
+func (s *Server) generateRefreshToken(user User) (string, error) {
+	claims := jwt.MapClaims{
+		"username": user.Username,
+		"exp":      time.Now().Add(7 * 24 * time.Hour).Unix(),
+		"type":     "refresh",
+	}
+
+	token := jwt.NewWithClaims(
+		jwt.SigningMethodHS256,
+		claims,
+	)
+
+	return token.SignedString(s.secret)
+}
+
 func main() {
 	server := &Server{
-		users:  make(map[string]User),
-		secret: []byte("for-now-random-key-hardcoded"),
+		users:         make(map[string]User),
+		secret:        []byte("for-now-random-key-hardcoded"),
+		refreshTokens: make(map[string]string),
 	}
 
 	mux := http.NewServeMux()
@@ -199,6 +277,7 @@ func main() {
 	mux.HandleFunc("/health", server.health)
 	mux.HandleFunc("/signup", server.signup)
 	mux.HandleFunc("/login", server.login)
+	mux.HandleFunc("/refresh", server.refresh)
 	mux.HandleFunc("/profile", server.authMiddleware(server.profile))
 	mux.HandleFunc("/admin", server.authMiddleware(server.admin))
 
