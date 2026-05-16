@@ -125,6 +125,30 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	if _, exists := s.refreshTokens[req.RefreshToken]; !exists {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid refresh token"})
+		return
+	}
+
+	delete(s.refreshTokens, req.RefreshToken)
+	writeJSON(w, http.StatusOK, map[string]string{"message": "looged out successfully.."})
+}
+
 func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
@@ -277,6 +301,7 @@ func main() {
 	mux.HandleFunc("/health", server.health)
 	mux.HandleFunc("/signup", server.signup)
 	mux.HandleFunc("/login", server.login)
+	mux.HandleFunc("/logout", server.logout)
 	mux.HandleFunc("/refresh", server.refresh)
 	mux.HandleFunc("/profile", server.authMiddleware(server.profile))
 	mux.HandleFunc("/admin", server.authMiddleware(server.admin))
