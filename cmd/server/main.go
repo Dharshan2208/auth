@@ -277,10 +277,11 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	loginLimiter := middleware.NewRateLimiter(5, time.Minute)
 
 	mux.HandleFunc("/health", server.health)
 	mux.HandleFunc("/signup", server.signup)
-	mux.HandleFunc("/login", server.login)
+	mux.HandleFunc("/login", loginLimiter.Limit(server.login))
 	mux.HandleFunc("/logout", server.logout)
 	mux.HandleFunc("/refresh", server.refresh)
 
