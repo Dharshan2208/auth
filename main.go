@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -21,6 +23,12 @@ type Server struct {
 	users         map[string]User
 	secret        []byte
 	refreshTokens map[string]string
+}
+
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode  int
+	wroteHeader bool
 }
 
 func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
@@ -227,6 +235,31 @@ func (s *Server) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// Logging middleware
+func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		requestID := uuid.New().String()[:8]
+
+		// Attaching requestID to context and headers
+		ctx := context.WithValue(r.Context(), "requestID", requestID)
+		r = r.WithContext(ctx)
+		w.Header().Set("X-Request-ID", requestID)
+
+		rw := &responseWriter{ResponseWriter: w, statusCode: 0, wroteHeader: false}
+
+		log.Printf(`[REQ] %s | %s %s | IP: %s | RequestID: %s`,
+			r.Proto, r.Method, r.URL.Path, r.RemoteAddr, requestID)
+
+		next.ServeHTTP(rw, r)
+
+		duration := time.Since(start)
+
+		log.Printf(`[RES] %s | %s %s | Status: %d | Duration: %v | RequestID: %s`,
+			r.Proto, r.Method, r.URL.Path, rw.statusCode, duration, requestID)
+	})
+}
+
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"status": "running",
@@ -256,6 +289,22 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	if rw.wroteHeader {
+		return // prevent multiple WriteHeader calls
+	}
+	rw.statusCode = code
+	rw.wroteHeader = true
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	if !rw.wroteHeader {
+		rw.WriteHeader(http.StatusOK) // default only if nothing was set
+	}
+	return rw.ResponseWriter.Write(b)
 }
 
 func (s *Server) generateJWT(user User) (string, error) {
@@ -306,6 +355,8 @@ func main() {
 	mux.HandleFunc("/profile", server.authMiddleware(server.profile))
 	mux.HandleFunc("/admin", server.authMiddleware(server.admin))
 
+	loggedMux := server.loggingMiddleware(mux)
+
 	log.Println("Server running on : 8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	log.Fatal(http.ListenAndServe(":8080", loggedMux))
 }
