@@ -260,6 +260,19 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func (s *Server) corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"status": "running",
@@ -355,7 +368,7 @@ func main() {
 	mux.HandleFunc("/profile", server.authMiddleware(server.profile))
 	mux.HandleFunc("/admin", server.authMiddleware(server.admin))
 
-	loggedMux := server.loggingMiddleware(mux)
+	loggedMux := server.loggingMiddleware(server.corsMiddleware(mux))
 
 	log.Println("Server running on : 8080")
 	log.Fatal(http.ListenAndServe(":8080", loggedMux))
