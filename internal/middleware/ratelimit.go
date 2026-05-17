@@ -17,13 +17,41 @@ type RateLimiter struct {
 	clients map[string]*clientInfo
 	limit   int
 	window  time.Duration
+	done    chan struct{}
 }
 
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
-	return &RateLimiter{
+	rl := &RateLimiter{
 		clients: make(map[string]*clientInfo),
 		limit:   limit,
 		window:  window,
+		done:    make(chan struct{}),
+	}
+	go rl.cleanup()
+	return rl
+}
+
+func (rl *RateLimiter) Stop() {
+	close(rl.done)
+}
+
+func (rl *RateLimiter) cleanup() {
+	ticker := time.NewTicker(rl.window)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			rl.mu.Lock()
+			for ip, client := range rl.clients {
+				if time.Now().After(client.ResetAt) {
+					delete(rl.clients, ip)
+				}
+			}
+			rl.mu.Unlock()
+		case <-rl.done:
+			return
+		}
 	}
 }
 
