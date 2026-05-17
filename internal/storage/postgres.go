@@ -133,6 +133,25 @@ func (s *Store) GetUserIDByRefreshToken(tokenHash string) (int, error) {
 	return userID, err
 }
 
+// ConsumeRefreshToken atomically deletes the token and returns its user_id.
+// If the token was already consumed, it returns an error...
+// This eliminates the TOCTOU (Time-of-Check to Time-of-Use)race between checking and deleting.
+func (s *Store) ConsumeRefreshToken(tokenHash string) (int, error) {
+	var userID int
+
+	err := s.DB.QueryRow(
+		context.Background(),
+		`
+		DELETE FROM refresh_tokens
+		WHERE token_hash = $1
+		RETURNING user_id
+		`,
+		tokenHash,
+	).Scan(&userID)
+
+	return userID, err
+}
+
 func (s *Store) Ping(ctx context.Context) error {
 	return s.DB.Ping(ctx)
 }

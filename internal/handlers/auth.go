@@ -195,7 +195,9 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	hashed := auth.HashToken(req.RefreshToken)
 
-	userID, err := h.Store.GetUserIDByRefreshToken(hashed)
+	// Atomically claim the token — DELETE ... RETURNING is a single statement,
+	// so only one concurrent request can win the race.
+	userID, err := h.Store.ConsumeRefreshToken(hashed)
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "refresh token revoked"})
 		return
@@ -206,8 +208,6 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "user not found"})
 		return
 	}
-
-	_ = h.Store.DeleteRefreshToken(hashed)
 
 	newRefreshToken, err := auth.GenerateRefreshToken(user, h.Secret, h.Cfg.RefreshTokenTTL)
 	if err != nil {
