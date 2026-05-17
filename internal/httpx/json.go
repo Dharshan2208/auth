@@ -11,6 +11,7 @@ func WriteJSON(w http.ResponseWriter, status int, data any) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 
-func DecodeJSON(r *http.Request, dst any) error {
+func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	return json.NewDecoder(r.Body).Decode(dst)
 }

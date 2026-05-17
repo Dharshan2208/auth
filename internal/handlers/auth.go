@@ -25,7 +25,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 
-	if err := httpx.DecodeJSON(r, &req); err != nil {
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
@@ -75,7 +75,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 
-	if err := httpx.DecodeJSON(r, &req); err != nil {
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
@@ -129,7 +129,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		RefreshToken string `json:"refresh_token"`
 	}
 
-	if err := httpx.DecodeJSON(r, &req); err != nil {
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
@@ -155,7 +155,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		RefreshToken string `json:"refresh_token"`
 	}
 
-	if err := httpx.DecodeJSON(r, &req); err != nil {
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
