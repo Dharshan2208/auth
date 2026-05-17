@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -46,15 +47,10 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	role := "user"
-	if req.Username == "admin" {
-		role = "admin"
-	}
-
 	user := models.User{
 		Username: req.Username,
 		Password: hashedPassword,
-		Role:     role,
+		Role:     "user",
 	}
 
 	if err := h.Store.CreateUser(user); err != nil {
@@ -166,6 +162,9 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	token, err := jwt.Parse(req.RefreshToken,
 		func(token *jwt.Token) (any, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
 			return h.Secret, nil
 		},
 	)
