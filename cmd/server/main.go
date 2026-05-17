@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,11 +17,16 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		AddSource: true,
+	})))
+
 	cfg := config.Load()
 
 	store, err := storage.New(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to create store", "error", err)
+		os.Exit(1)
 	}
 	defer store.DB.Close()
 
@@ -37,9 +42,10 @@ func main() {
 	}
 
 	go func() {
-		log.Println("Server running on :", cfg.Port)
+		slog.Info("server starting", "port", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
+			slog.Error("server listen failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -47,14 +53,15 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	slog.Info("shutting down server")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("server forced to shutdown: %v", err)
+		slog.Error("server forced to shutdown", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("Server exited gracefully")
+	slog.Info("server exited gracefully")
 }

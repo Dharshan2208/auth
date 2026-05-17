@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -28,23 +28,21 @@ func Logging(next http.Handler) http.Handler {
 			ResponseWriter: w,
 		}
 
-		log.Printf(
-			"[REQ] %s %s | IP: %s | RequestID: %s",
-			r.Method,
-			r.URL.Path,
-			r.RemoteAddr,
-			requestID,
+		slog.Info("request started",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"ip", r.RemoteAddr,
+			"request_id", requestID,
 		)
 
 		next.ServeHTTP(rw, r)
 
-		log.Printf(
-			"[RES] %s %s | Status: %d | Duration: %v | RequestID: %s",
-			r.Method,
-			r.URL.Path,
-			rw.StatusCode,
-			time.Since(start),
-			requestID,
+		slog.Info("request completed",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", rw.StatusCode,
+			"duration", time.Since(start),
+			"request_id", requestID,
 		)
 	})
 }

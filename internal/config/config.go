@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -41,7 +41,8 @@ func getEnv(key, fallback string) string {
 func mustEnv(key string) string {
 	val := os.Getenv(key)
 	if val == "" {
-		log.Fatalf("missing required env: %s", key)
+		slog.Error("missing required environment variable", "key", key)
+		os.Exit(1)
 	}
 	return val
 }
@@ -51,7 +52,8 @@ func mustDuration(key string, fallback string) time.Duration {
 
 	d, err := time.ParseDuration(val)
 	if err != nil {
-		log.Fatalf("invalid duration for %s", key)
+		slog.Error("invalid duration for configuration", "key", key, "value", val)
+		os.Exit(1)
 	}
 
 	return d

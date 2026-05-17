@@ -133,6 +133,10 @@ func (s *Store) GetUserIDByRefreshToken(tokenHash string) (int, error) {
 	return userID, err
 }
 
+func (s *Store) Ping(ctx context.Context) error {
+	return s.DB.Ping(ctx)
+}
+
 func (s *Store) DeleteRefreshToken(
 	tokenHash string,
 ) error {

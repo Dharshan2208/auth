@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -54,12 +54,19 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Store.CreateUser(user); err != nil {
-		log.Printf("[SIGNUP] FAILED | Username: %s | Error: %+v", req.Username, err)
+		slog.Error("signup failed",
+			"username", req.Username,
+			"error", err,
+		)
 		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create user"})
 		return
 	}
 
-	log.Printf("[SIGNUP] SUCCESS | Username: %s | IP: %s | Time: %v", req.Username, r.RemoteAddr, time.Since(start))
+	slog.Info("signup success",
+		"username", req.Username,
+		"ip", r.RemoteAddr,
+		"duration", time.Since(start),
+	)
 	httpx.WriteJSON(w, http.StatusCreated, map[string]string{"message": "user created"})
 }
 
@@ -91,7 +98,12 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[LOGIN]  SUCCESS | Username: %s | Role: %s | IP: %s | Time: %v", req.Username, user.Role, r.RemoteAddr, time.Since(start))
+	slog.Info("login success",
+		"username", req.Username,
+		"role", user.Role,
+		"ip", r.RemoteAddr,
+		"duration", time.Since(start),
+	)
 
 	accessToken, err := auth.GenerateAccessToken(user, h.Secret, h.Cfg.AccessTokenTTL)
 	if err != nil {
