@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -9,12 +10,18 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+func writeUnauthorized(w http.ResponseWriter, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
 func Auth(secret []byte, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 
 		if authHeader == "" {
-			http.Error(w, "missing token", http.StatusUnauthorized)
+			writeUnauthorized(w, "missing authorization token")
 			return
 		}
 
@@ -34,24 +41,17 @@ func Auth(secret []byte, next http.HandlerFunc) http.HandlerFunc {
 		)
 
 		if err != nil || !token.Valid {
-			http.Error(w, "invalid token", http.StatusUnauthorized)
+			writeUnauthorized(w, "invalid or expired token")
 			return
 		}
 
 		claims := token.Claims.(jwt.MapClaims)
 
 		ctx := r.Context()
-		if username, ok := claims["username"]; ok {
-			ctx = context.WithValue(ctx, "username", username)
-		}
-		if email, ok := claims["email"]; ok {
-			ctx = context.WithValue(ctx, "email", email)
-		}
 		if role, ok := claims["role"]; ok {
 			ctx = context.WithValue(ctx, "role", role)
 		}
 		if rawID, ok := claims["user_id"]; ok {
-			// jwt.MapClaims unmarshals numbers as float64.
 			if f, ok := rawID.(float64); ok {
 				ctx = context.WithValue(ctx, "user_id", int(f))
 			} else {

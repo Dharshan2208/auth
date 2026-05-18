@@ -273,7 +273,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			_ = h.Store.RevokeAllSessionsForUserDevice(r.Context(), userIDFromClaims, r.UserAgent())
-			httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "refresh token reuse detected"})
+			httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid or expired refresh token"})
 			return
 		}
 		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not rotate session"})
@@ -308,6 +308,13 @@ func claimUserID(claims jwt.MapClaims) (int, bool) {
 }
 
 func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return host
 	}

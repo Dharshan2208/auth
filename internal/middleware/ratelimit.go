@@ -1,8 +1,10 @@
 package middleware
 
 import (
+	"encoding/json"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -55,9 +57,24 @@ func (rl *RateLimiter) cleanup() {
 	}
 }
 
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
 func (rl *RateLimiter) Limit(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		ip := clientIP(r)
 
 		rl.mu.Lock()
 		defer rl.mu.Unlock()
@@ -73,7 +90,9 @@ func (rl *RateLimiter) Limit(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if client.Attempts >= rl.limit {
-			http.Error(w, "too many attempts", http.StatusTooManyRequests)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode(map[string]string{"error": "too many requests"})
 			return
 		}
 

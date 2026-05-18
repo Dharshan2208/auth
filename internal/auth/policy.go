@@ -10,26 +10,23 @@ var usernameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_.]{2,31}$`)
 
 func ValidateUsername(username string) error {
 	if !usernameRe.MatchString(username) {
-		return errors.New("username must be 3-32 chars and use only a-z, 0-9, '_' or '.'")
+		return errors.New("invalid username format")
 	}
 	if contains(username, "..") || contains(username, "__") || contains(username, "._") || contains(username, "_.") {
-		return errors.New("username contains invalid sequence")
+		return errors.New("invalid username format")
 	}
 	return nil
 }
 
 func ValidatePassword(password string) error {
-	if len(password) < 12 {
-		return errors.New("password must be at least 12 characters")
-	}
-	if len(password) > 72 {
-		return errors.New("password must be at most 72 characters")
+	if len(password) < 12 || len(password) > 72 {
+		return errors.New("password does not meet security requirements")
 	}
 
 	var hasLower, hasUpper, hasDigit, hasSymbol bool
 	for _, r := range password {
 		if unicode.IsSpace(r) {
-			return errors.New("password must not contain spaces")
+			return errors.New("password does not meet security requirements")
 		}
 		switch {
 		case unicode.IsLower(r):
@@ -44,7 +41,7 @@ func ValidatePassword(password string) error {
 	}
 
 	if !(hasLower && hasUpper && hasDigit && hasSymbol) {
-		return errors.New("password must include lowercase, uppercase, number, and symbol")
+		return errors.New("password does not meet security requirements")
 	}
 	return nil
 }
