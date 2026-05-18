@@ -1,7 +1,8 @@
 1. User Identity Management
 
-- Register
-- Login,Logout
+- Register -- Done
+- Login,Logout -- Done
+- Refresh -- Done
 - Email Verification
 - Password Rest/Change
 - Delete Account
@@ -10,6 +11,7 @@
 
 With unique email constraint,username rules.normalized emails,strong password validation
 
+<!-- Done
 2. Session Architecture
 
 - Access Token(5mins)
@@ -17,7 +19,7 @@ With unique email constraint,username rules.normalized emails,strong password va
 
 Refresh token ...verify current and invallidate the old one and issue new refresh and access token
 
-and if reused then revoke the whole session
+and if reused then revoke the whole session -->
 
 3. Token Revocation
 
@@ -34,17 +36,19 @@ last_used
 
 And then we can have middleware check
 
+<!-- Done
 4. Security Middleware
 
-- Rate limiting for login,register,reset and verify
+- Rate limiting for login,register,reset and verify -->
 
 5. CSRF Protection
 
 - Have to implement csrf token
 
+<!-- DOne
 6. Secure Headers
 
-- Setting :HSTS,CSP,X-Frame-OptionsX-Content-Type-Options
+- Setting :HSTS,CSP,X-Frame-OptionsX-Content-Type-Options -->
 
 7. DB Design improvement
 

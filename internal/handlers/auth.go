@@ -36,6 +36,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.Username = strings.TrimSpace(req.Username)
+	req.Username = strings.ToLower(req.Username)
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 
 	if req.Username == "" || req.Email == "" || req.Password == "" {
@@ -46,8 +47,13 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid email"})
 		return
 	}
-	if len(req.Password) < 8 {
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at least 8 characters"})
+
+	if err := auth.ValidateUsername(req.Username); err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if err := auth.ValidatePassword(req.Password); err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
@@ -118,6 +124,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.Username = strings.TrimSpace(req.Username)
+	req.Username = strings.ToLower(req.Username)
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 
 	identifier := req.Username

@@ -36,11 +36,12 @@ func main() {
 
 	recoveryMux := middleware.Recovery(mux)
 	loggedMux := middleware.Logging(middleware.CORS(recoveryMux))
+	securedMux := middleware.SecureHeaders(loggedMux)
 
 	// to prevent slowloris attacks
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           loggedMux,
+		Handler:           securedMux,
 		ReadTimeout:       10 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      10 * time.Second,
