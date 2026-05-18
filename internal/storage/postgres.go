@@ -34,20 +34,22 @@ func (s *Store) CreateUser(user models.User) error {
 		`	
 		INSERT INTO users (
 			username,
+			email,
 			password_hash,
 			role
 		)
-		VALUES ($1, $2, $3)
+		VALUES ($1, $2, $3, $4)
 		`,
 		user.Username,
-		user.Password,
+		user.Email,
+		user.PasswordHash,
 		user.Role,
 	)
 
 	return err
 }
 
-func (s *Store) GetUserByUsername(username string) (models.User, error) {
+func (s *Store) GetUserByUsernameOrEmail(identifier string) (models.User, error) {
 	var user models.User
 
 	err := s.DB.QueryRow(
@@ -56,17 +58,19 @@ func (s *Store) GetUserByUsername(username string) (models.User, error) {
 		SELECT
 			id,
 			username,
+			email,
 			password_hash,
 			role,
 			created_at
 		FROM users
-		WHERE username = $1
+		WHERE username = $1 OR email = $1
 		`,
-		username,
+		identifier,
 	).Scan(
 		&user.ID,
 		&user.Username,
-		&user.Password,
+		&user.Email,
+		&user.PasswordHash,
 		&user.Role,
 		&user.CreatedAt,
 	)
@@ -83,6 +87,7 @@ func (s *Store) GetUserByID(id int) (models.User, error) {
 		SELECT
 			id,
 			username,
+			email,
 			password_hash,
 			role,
 			created_at
@@ -93,7 +98,8 @@ func (s *Store) GetUserByID(id int) (models.User, error) {
 	).Scan(
 		&user.ID,
 		&user.Username,
-		&user.Password,
+		&user.Email,
+		&user.PasswordHash,
 		&user.Role,
 		&user.CreatedAt,
 	)

@@ -9,7 +9,9 @@ import (
 
 func GenerateAccessToken(user models.User, secret []byte, ttl time.Duration) (string, error) {
 	claims := jwt.MapClaims{
+		"user_id":  user.ID,
 		"username": user.Username,
+		"email":    user.Email,
 		"role":     user.Role,
 		"exp":      time.Now().Add(ttl).Unix(),
 	}
@@ -24,6 +26,7 @@ func GenerateAccessToken(user models.User, secret []byte, ttl time.Duration) (st
 
 func GenerateRefreshToken(user models.User, secret []byte, ttl time.Duration) (string, error) {
 	claims := jwt.MapClaims{
+		"user_id":  user.ID,
 		"username": user.Username,
 		"type":     "refresh",
 		"exp":      time.Now().Add(ttl).Unix(),

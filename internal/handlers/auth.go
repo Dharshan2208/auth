@@ -1,12 +1,16 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/mail"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/Dharshan2208/auth/internal/auth"
 	"github.com/Dharshan2208/auth/internal/httpx"
@@ -22,6 +26,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Username string `json:"username"`
+		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
 
@@ -30,14 +35,35 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Username == "" || req.Password == "" {
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "username and password are required"})
+	req.Username = strings.TrimSpace(req.Username)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+
+	if req.Username == "" || req.Email == "" || req.Password == "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "username, email and password are required"})
+		return
+	}
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid email"})
+		return
+	}
+	if len(req.Password) < 8 {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at least 8 characters"})
 		return
 	}
 
-	_, err := h.Store.GetUserByUsername(req.Username)
-	if err == nil {
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "user already exists"})
+	if _, err := h.Store.GetUserByUsernameOrEmail(req.Username); err == nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "username already exists"})
+		return
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not validate username"})
+		return
+	}
+
+	if _, err := h.Store.GetUserByUsernameOrEmail(req.Email); err == nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "email already exists"})
+		return
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not validate email"})
 		return
 	}
 
@@ -48,14 +74,16 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := models.User{
-		Username: req.Username,
-		Password: hashedPassword,
-		Role:     "user",
+		Username:     req.Username,
+		Email:        req.Email,
+		PasswordHash: hashedPassword,
+		Role:         "user",
 	}
 
 	if err := h.Store.CreateUser(user); err != nil {
 		slog.Error("signup failed",
 			"username", req.Username,
+			"email", req.Email,
 			"error", err,
 		)
 		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create user"})
@@ -64,6 +92,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("signup success",
 		"username", req.Username,
+		"email", req.Email,
 		"ip", r.RemoteAddr,
 		"duration", time.Since(start),
 	)
@@ -79,6 +108,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Username string `json:"username"`
+		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
 
@@ -87,19 +117,32 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.Store.GetUserByUsername(req.Username)
+	req.Username = strings.TrimSpace(req.Username)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+
+	identifier := req.Username
+	if req.Email != "" {
+		identifier = req.Email
+	}
+	if identifier == "" || req.Password == "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "username/email and password are required"})
+		return
+	}
+
+	user, err := h.Store.GetUserByUsernameOrEmail(identifier)
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid creds"})
 		return
 	}
 
-	if err := auth.CheckPassword(user.Password, req.Password); err != nil {
+	if err := auth.CheckPassword(user.PasswordHash, req.Password); err != nil {
 		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid creds"})
 		return
 	}
 
 	slog.Info("login success",
-		"username", req.Username,
+		"username", user.Username,
+		"email", user.Email,
 		"role", user.Role,
 		"ip", r.RemoteAddr,
 		"duration", time.Since(start),

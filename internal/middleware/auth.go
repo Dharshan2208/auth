@@ -40,17 +40,24 @@ func Auth(secret []byte, next http.HandlerFunc) http.HandlerFunc {
 
 		claims := token.Claims.(jwt.MapClaims)
 
-		ctx := context.WithValue(
-			r.Context(),
-			"username",
-			claims["username"],
-		)
-
-		ctx = context.WithValue(
-			ctx,
-			"role",
-			claims["role"],
-		)
+		ctx := r.Context()
+		if username, ok := claims["username"]; ok {
+			ctx = context.WithValue(ctx, "username", username)
+		}
+		if email, ok := claims["email"]; ok {
+			ctx = context.WithValue(ctx, "email", email)
+		}
+		if role, ok := claims["role"]; ok {
+			ctx = context.WithValue(ctx, "role", role)
+		}
+		if rawID, ok := claims["user_id"]; ok {
+			// jwt.MapClaims unmarshals numbers as float64.
+			if f, ok := rawID.(float64); ok {
+				ctx = context.WithValue(ctx, "user_id", int(f))
+			} else {
+				ctx = context.WithValue(ctx, "user_id", rawID)
+			}
+		}
 
 		next(w, r.WithContext(ctx))
 	}
