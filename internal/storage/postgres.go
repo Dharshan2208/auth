@@ -28,9 +28,9 @@ func New(databaseURL string) (*Store, error) {
 	}, nil
 }
 
-func (s *Store) CreateUser(user models.User) error {
+func (s *Store) CreateUser(ctx context.Context, user models.User) error {
 	_, err := s.DB.Exec(
-		context.Background(),
+		ctx,
 		`	
 		INSERT INTO users (
 			username,
@@ -49,11 +49,11 @@ func (s *Store) CreateUser(user models.User) error {
 	return err
 }
 
-func (s *Store) GetUserByUsernameOrEmail(identifier string) (models.User, error) {
+func (s *Store) GetUserByUsernameOrEmail(ctx context.Context, identifier string) (models.User, error) {
 	var user models.User
 
 	err := s.DB.QueryRow(
-		context.Background(),
+		ctx,
 		`
 		SELECT
 			id,
@@ -78,11 +78,11 @@ func (s *Store) GetUserByUsernameOrEmail(identifier string) (models.User, error)
 	return user, err
 }
 
-func (s *Store) GetUserByID(id int) (models.User, error) {
+func (s *Store) GetUserByID(ctx context.Context, id int) (models.User, error) {
 	var user models.User
 
 	err := s.DB.QueryRow(
-		context.Background(),
+		ctx,
 		`
 		SELECT
 			id,
@@ -107,9 +107,9 @@ func (s *Store) GetUserByID(id int) (models.User, error) {
 	return user, err
 }
 
-func (s *Store) SaveRefreshToken(userID int, tokenHash string, expiresAt time.Time) error {
+func (s *Store) SaveRefreshToken(ctx context.Context, userID int, tokenHash string, expiresAt time.Time) error {
 	_, err := s.DB.Exec(
-		context.Background(),
+		ctx,
 		`
 		INSERT INTO refresh_tokens
 		(user_id, token_hash, expires_at)
@@ -123,11 +123,11 @@ func (s *Store) SaveRefreshToken(userID int, tokenHash string, expiresAt time.Ti
 	return err
 }
 
-func (s *Store) GetUserIDByRefreshToken(tokenHash string) (int, error) {
+func (s *Store) GetUserIDByRefreshToken(ctx context.Context, tokenHash string) (int, error) {
 	var userID int
 
 	err := s.DB.QueryRow(
-		context.Background(),
+		ctx,
 		`
 		SELECT user_id
 		FROM refresh_tokens
@@ -142,11 +142,11 @@ func (s *Store) GetUserIDByRefreshToken(tokenHash string) (int, error) {
 // ConsumeRefreshToken atomically deletes the token and returns its user_id.
 // If the token was already consumed, it returns an error...
 // This eliminates the TOCTOU (Time-of-Check to Time-of-Use)race between checking and deleting.
-func (s *Store) ConsumeRefreshToken(tokenHash string) (int, error) {
+func (s *Store) ConsumeRefreshToken(ctx context.Context, tokenHash string) (int, error) {
 	var userID int
 
 	err := s.DB.QueryRow(
-		context.Background(),
+		ctx,
 		`
 		DELETE FROM refresh_tokens
 		WHERE token_hash = $1
@@ -163,10 +163,11 @@ func (s *Store) Ping(ctx context.Context) error {
 }
 
 func (s *Store) DeleteRefreshToken(
+	ctx context.Context,
 	tokenHash string,
 ) error {
 	_, err := s.DB.Exec(
-		context.Background(),
+		ctx,
 		`
 		DELETE FROM refresh_tokens
 		WHERE token_hash = $1

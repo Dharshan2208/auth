@@ -32,13 +32,19 @@ func main() {
 
 	mux := http.NewServeMux()
 	h := handlers.New(store, cfg)
-	router.Register(mux, h)
+	rateLimiters := router.Register(mux, h)
 
-	loggedMux := middleware.Logging(middleware.CORS(mux))
+	recoveryMux := middleware.Recovery(mux)
+	loggedMux := middleware.Logging(middleware.CORS(recoveryMux))
 
+	// to prevent slowloris attacks
 	srv := &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: loggedMux,
+		Addr:              ":" + cfg.Port,
+		Handler:           loggedMux,
+		ReadTimeout:       10 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {
@@ -54,6 +60,11 @@ func main() {
 	<-quit
 
 	slog.Info("shutting down server")
+
+	// rate limiter go routines need to be stopped
+	for _, rl := range rateLimiters {
+		rl.Stop()
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

@@ -51,7 +51,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.Store.GetUserByUsernameOrEmail(req.Username); err == nil {
+	if _, err := h.Store.GetUserByUsernameOrEmail(r.Context(), req.Username); err == nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "username already exists"})
 		return
 	} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -59,7 +59,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.Store.GetUserByUsernameOrEmail(req.Email); err == nil {
+	if _, err := h.Store.GetUserByUsernameOrEmail(r.Context(), req.Email); err == nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "email already exists"})
 		return
 	} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -80,7 +80,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		Role:         "user",
 	}
 
-	if err := h.Store.CreateUser(user); err != nil {
+	if err := h.Store.CreateUser(r.Context(), user); err != nil {
 		slog.Error("signup failed",
 			"username", req.Username,
 			"email", req.Email,
@@ -129,7 +129,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.Store.GetUserByUsernameOrEmail(identifier)
+	user, err := h.Store.GetUserByUsernameOrEmail(r.Context(), identifier)
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid creds"})
 		return
@@ -162,7 +162,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	hashed := auth.HashToken(refreshToken)
 
-	err = h.Store.SaveRefreshToken(user.ID, hashed, time.Now().Add(h.Cfg.RefreshTokenTTL))
+	err = h.Store.SaveRefreshToken(r.Context(), user.ID, hashed, time.Now().Add(h.Cfg.RefreshTokenTTL))
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save refresh token"})
 		return
@@ -191,7 +191,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 	hashed := auth.HashToken(req.RefreshToken)
 
-	err := h.Store.DeleteRefreshToken(hashed)
+	err := h.Store.DeleteRefreshToken(r.Context(), hashed)
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid refresh token"})
 		return
@@ -238,15 +238,15 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	hashed := auth.HashToken(req.RefreshToken)
 
-	// Atomically claim the token — DELETE ... RETURNING is a single statement,
+	// Atomically claim the token ...DELETE ... RETURNING is a single statement,
 	// so only one concurrent request can win the race.
-	userID, err := h.Store.ConsumeRefreshToken(hashed)
+	userID, err := h.Store.ConsumeRefreshToken(r.Context(), hashed)
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "refresh token revoked"})
 		return
 	}
 
-	user, err := h.Store.GetUserByID(userID)
+	user, err := h.Store.GetUserByID(r.Context(), userID)
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "user not found"})
 		return
@@ -260,7 +260,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	newHash := auth.HashToken(newRefreshToken)
 
-	err = h.Store.SaveRefreshToken(user.ID, newHash, time.Now().Add(h.Cfg.RefreshTokenTTL))
+	err = h.Store.SaveRefreshToken(r.Context(), user.ID, newHash, time.Now().Add(h.Cfg.RefreshTokenTTL))
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save refresh token"})
 		return
