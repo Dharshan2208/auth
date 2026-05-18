@@ -7,9 +7,13 @@ import (
 )
 
 func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
-	httpx.WriteJSON(w, http.StatusOK, map[string]string{
-		"message": "welcome to profile",
-	})
+	resp := map[string]any{
+		"user_id":  r.Context().Value("user_id"),
+		"username": r.Context().Value("username"),
+		"email":    r.Context().Value("email"),
+		"role":     r.Context().Value("role"),
+	}
+	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) Admin(w http.ResponseWriter, r *http.Request) {

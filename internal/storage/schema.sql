@@ -7,13 +7,17 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE refresh_tokens (
+CREATE TABLE sessions (
     id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(id) ON DELETE CASCADE,
-    token_hash TEXT NOT NULL,
+    refresh_hash TEXT NOT NULL,
     expires_at TIMESTAMP NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
+    revoked_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    last_used_at TIMESTAMP DEFAULT NOW(),
+    ip TEXT NULL,
+    user_agent TEXT NULL
 );
 
--- On delete cascade
--- So that delete user -- their sessions auto delete
+CREATE UNIQUE INDEX sessions_refresh_hash_unique ON sessions(refresh_hash);
+CREATE INDEX sessions_user_id_idx ON sessions(user_id);

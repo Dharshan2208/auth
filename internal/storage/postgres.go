@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Dharshan2208/auth/internal/models"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -107,52 +108,51 @@ func (s *Store) GetUserByID(ctx context.Context, id int) (models.User, error) {
 	return user, err
 }
 
-func (s *Store) SaveRefreshToken(ctx context.Context, userID int, tokenHash string, expiresAt time.Time) error {
+func (s *Store) CreateSession(ctx context.Context, userID int, refreshHash string, expiresAt time.Time, ip string, userAgent string) error {
 	_, err := s.DB.Exec(
 		ctx,
 		`
-		INSERT INTO refresh_tokens
-		(user_id, token_hash, expires_at)
-		VALUES ($1, $2, $3)
+		INSERT INTO sessions
+			(user_id, refresh_hash, expires_at, ip, user_agent)
+		VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''))
 		`,
 		userID,
-		tokenHash,
+		refreshHash,
 		expiresAt,
+		ip,
+		userAgent,
 	)
 
 	return err
 }
 
-func (s *Store) GetUserIDByRefreshToken(ctx context.Context, tokenHash string) (int, error) {
+// RotateSession atomically replaces the refresh hash and returns the owning user_id.
+// Only non-revoked, non-expired sessions can be rotated.
+func (s *Store) RotateSession(ctx context.Context, oldRefreshHash string, newRefreshHash string, newExpiresAt time.Time, now time.Time, ip string, userAgent string) (int, error) {
 	var userID int
 
 	err := s.DB.QueryRow(
 		ctx,
 		`
-		SELECT user_id
-		FROM refresh_tokens
-		WHERE token_hash = $1
-		`,
-		tokenHash,
-	).Scan(&userID)
-
-	return userID, err
-}
-
-// ConsumeRefreshToken atomically deletes the token and returns its user_id.
-// If the token was already consumed, it returns an error...
-// This eliminates the TOCTOU (Time-of-Check to Time-of-Use)race between checking and deleting.
-func (s *Store) ConsumeRefreshToken(ctx context.Context, tokenHash string) (int, error) {
-	var userID int
-
-	err := s.DB.QueryRow(
-		ctx,
-		`
-		DELETE FROM refresh_tokens
-		WHERE token_hash = $1
+		UPDATE sessions
+		SET
+			refresh_hash = $2,
+			expires_at = $3,
+			last_used_at = $4,
+			ip = NULLIF($5, ''),
+			user_agent = NULLIF($6, '')
+		WHERE
+			refresh_hash = $1
+			AND revoked_at IS NULL
+			AND expires_at > $4
 		RETURNING user_id
 		`,
-		tokenHash,
+		oldRefreshHash,
+		newRefreshHash,
+		newExpiresAt,
+		now,
+		ip,
+		userAgent,
 	).Scan(&userID)
 
 	return userID, err
@@ -166,14 +166,40 @@ func (s *Store) DeleteRefreshToken(
 	ctx context.Context,
 	tokenHash string,
 ) error {
-	_, err := s.DB.Exec(
+	cmd, err := s.DB.Exec(
 		ctx,
 		`
-		DELETE FROM refresh_tokens
-		WHERE token_hash = $1
+		UPDATE sessions
+		SET revoked_at = NOW()
+		WHERE refresh_hash = $1 AND revoked_at IS NULL
 		`,
 		tokenHash,
 	)
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
 
+// RevokeAllSessionsForUserDevice revokes all sessions for a user on a given device.
+func (s *Store) RevokeAllSessionsForUserDevice(ctx context.Context, userID int, userAgent string) error {
+	_, err := s.DB.Exec(
+		ctx,
+		`
+		UPDATE sessions
+		SET revoked_at = NOW()
+		WHERE user_id = $1
+		  AND revoked_at IS NULL
+		  AND (
+			($2 <> '' AND user_agent = $2)
+			OR ($2 = '')
+		  )
+		`,
+		userID,
+		userAgent,
+	)
 	return err
 }

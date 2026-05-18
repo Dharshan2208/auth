@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -169,7 +170,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	hashed := auth.HashToken(refreshToken)
 
-	err = h.Store.SaveRefreshToken(r.Context(), user.ID, hashed, time.Now().Add(h.Cfg.RefreshTokenTTL))
+	err = h.Store.CreateSession(r.Context(), user.ID, hashed, time.Now().Add(h.Cfg.RefreshTokenTTL), clientIP(r), r.UserAgent())
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save refresh token"})
 		return
@@ -245,20 +246,21 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	hashed := auth.HashToken(req.RefreshToken)
 
-	// Atomically claim the token ...DELETE ... RETURNING is a single statement,
-	// so only one concurrent request can win the race.
-	userID, err := h.Store.ConsumeRefreshToken(r.Context(), hashed)
-	if err != nil {
-		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "refresh token revoked"})
+	userIDFromClaims, ok := claimUserID(claims)
+	if !ok {
+		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid refresh token"})
 		return
 	}
 
-	user, err := h.Store.GetUserByID(r.Context(), userID)
+	user, err := h.Store.GetUserByID(r.Context(), userIDFromClaims)
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "user not found"})
 		return
 	}
 
+	// Rotate the refresh token in DB first; if the old token is missing but still JWT-valid,
+	// treat it as reuse and revoke sessions for this device.
+	now := time.Now()
 	newRefreshToken, err := auth.GenerateRefreshToken(user, h.Secret, h.Cfg.RefreshTokenTTL)
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "token generation failed"})
@@ -267,9 +269,14 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	newHash := auth.HashToken(newRefreshToken)
 
-	err = h.Store.SaveRefreshToken(r.Context(), user.ID, newHash, time.Now().Add(h.Cfg.RefreshTokenTTL))
+	_, err = h.Store.RotateSession(r.Context(), hashed, newHash, now.Add(h.Cfg.RefreshTokenTTL), now, clientIP(r), r.UserAgent())
 	if err != nil {
-		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not save refresh token"})
+		if errors.Is(err, pgx.ErrNoRows) {
+			_ = h.Store.RevokeAllSessionsForUserDevice(r.Context(), userIDFromClaims, r.UserAgent())
+			httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "refresh token reuse detected"})
+			return
+		}
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not rotate session"})
 		return
 	}
 
@@ -283,4 +290,26 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		"access_token":  accessToken,
 		"refresh_token": newRefreshToken,
 	})
+}
+
+func claimUserID(claims jwt.MapClaims) (int, bool) {
+	raw, ok := claims["user_id"]
+	if !ok {
+		return 0, false
+	}
+	// jwt.MapClaims unmarshals numbers as float64.
+	if f, ok := raw.(float64); ok {
+		return int(f), true
+	}
+	if i, ok := raw.(int); ok {
+		return i, true
+	}
+	return 0, false
+}
+
+func clientIP(r *http.Request) string {
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
