@@ -28,16 +28,9 @@ func Logging(next http.Handler) http.Handler {
 			ResponseWriter: w,
 		}
 
-		slog.Info("request started",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"ip", r.RemoteAddr,
-			"request_id", requestID,
-		)
-
 		next.ServeHTTP(rw, r)
 
-		slog.Info("request completed",
+		slog.Info("request ",
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", rw.StatusCode,

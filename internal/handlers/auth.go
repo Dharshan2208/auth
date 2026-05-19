@@ -28,7 +28,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
 
@@ -37,7 +37,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 
 	if req.Username == "" || req.Email == "" || req.Password == "" {
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "username, email and password are required"})
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing required fields"})
 		return
 	}
 	if _, err := mail.ParseAddress(req.Email); err != nil {
@@ -55,24 +55,24 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := h.Store.GetUserByUsernameOrEmail(r.Context(), req.Username); err == nil {
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "username already exists"})
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "username already taken"})
 		return
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not validate username"})
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
 	if _, err := h.Store.GetUserByUsernameOrEmail(r.Context(), req.Email); err == nil {
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "email already exists"})
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "email already registered"})
 		return
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not validate email"})
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
 	hashedPassword, err := auth.HashPassword(req.Password)
 	if err != nil {
-		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not hash password"})
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
@@ -89,7 +89,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 			"email", req.Email,
 			"error", err,
 		)
-		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create user"})
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
@@ -103,33 +103,25 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-
 	var req struct {
-		Username string `json:"username"`
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Identifier string `json:"identifier"`
+		Password   string `json:"password"`
 	}
 
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
 
-	req.Username = strings.TrimSpace(req.Username)
-	req.Username = strings.ToLower(req.Username)
-	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Identifier = strings.TrimSpace(req.Identifier)
+	req.Identifier = strings.ToLower(req.Identifier)
 
-	identifier := req.Username
-	if req.Email != "" {
-		identifier = req.Email
-	}
-	if identifier == "" || req.Password == "" {
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "username/email and password are required"})
+	if req.Identifier == "" || req.Password == "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing required fields"})
 		return
 	}
 
-	user, err := h.Store.GetUserByUsernameOrEmail(r.Context(), identifier)
+	user, err := h.Store.GetUserByUsernameOrEmail(r.Context(), req.Identifier)
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid creds"})
 		return
@@ -139,14 +131,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid creds"})
 		return
 	}
-
-	slog.Info("login success",
-		"username", user.Username,
-		"email", user.Email,
-		"role", user.Role,
-		"ip", r.RemoteAddr,
-		"duration", time.Since(start),
-	)
 
 	accessToken, err := auth.GenerateAccessToken(user, h.Secret, h.Cfg.AccessTokenTTL)
 	if err != nil {
@@ -180,7 +164,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
 
@@ -201,7 +185,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
 

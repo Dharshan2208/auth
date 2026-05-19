@@ -17,7 +17,7 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	user, err := h.Store.GetUserByID(r.Context(), userID)
 	if err != nil {
 		slog.Error("profile: failed to fetch user", "user_id", userID, "error", err)
-		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not fetch profile"})
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 

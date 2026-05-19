@@ -10,10 +10,10 @@ var usernameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_.]{2,31}$`)
 
 func ValidateUsername(username string) error {
 	if !usernameRe.MatchString(username) {
-		return errors.New("invalid username format")
+		return errors.New("invalid username")
 	}
 	if contains(username, "..") || contains(username, "__") || contains(username, "._") || contains(username, "_.") {
-		return errors.New("invalid username format")
+		return errors.New("invalid username")
 	}
 	return nil
 }
