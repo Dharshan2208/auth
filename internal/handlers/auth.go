@@ -20,10 +20,6 @@ import (
 
 func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	if r.Method != http.MethodPost {
-		httpx.WriteJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
 
 	var req struct {
 		Username string `json:"username"`
@@ -108,10 +104,6 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	if r.Method != http.MethodPost {
-		httpx.WriteJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
 
 	var req struct {
 		Username string `json:"username"`
@@ -183,11 +175,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpx.WriteJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
-
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
 	}
@@ -209,11 +196,6 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		httpx.WriteJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
-
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
 	}
