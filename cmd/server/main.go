@@ -16,6 +16,19 @@ import (
 	"github.com/Dharshan2208/auth/internal/storage"
 )
 
+// @title Auth Service API
+// @version 1.0.0
+// @description A secure authentication service with JWT-based access and refresh tokens. Provides user registration, login, token refresh, logout, password change, and role-based access control.
+// @contact.name Dharshan
+// @contact.url https://github.com/Dharshan2208/auth
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+// @host localhost:8080
+// @BasePath /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Enter the token with the `Bearer:` prefix, e.g. "Bearer abcde12345".
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		AddSource: true,

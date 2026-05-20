@@ -1,0 +1,362 @@
+basePath: /api/v1
+definitions:
+  handlers.AdminResponse:
+    properties:
+      message:
+        example: welcome admin
+        type: string
+    type: object
+  handlers.ChangePasswordRequest:
+    properties:
+      confirm_old_password:
+        example: Str0ng!Pass1
+        type: string
+      new_password:
+        example: NewStr0ng!Pass2
+        type: string
+      old_password:
+        example: Str0ng!Pass1
+        type: string
+    type: object
+  handlers.ErrorResponse:
+    properties:
+      error:
+        example: description of what went wrong
+        type: string
+    type: object
+  handlers.HealthResponse:
+    properties:
+      status:
+        example: running
+        type: string
+    type: object
+  handlers.LoginRequest:
+    properties:
+      identifier:
+        example: johndoe
+        type: string
+      password:
+        example: Str0ng!Pass1
+        type: string
+    type: object
+  handlers.LogoutRequest:
+    properties:
+      refresh_token:
+        example: eyJhbGciOiJIUzI1NiIs...
+        type: string
+    type: object
+  handlers.MessageResponse:
+    properties:
+      message:
+        example: operation successful
+        type: string
+    type: object
+  handlers.ProfileResponse:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      role:
+        example: user
+        type: string
+      user_id:
+        example: 1
+        type: integer
+      username:
+        example: johndoe
+        type: string
+    type: object
+  handlers.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        example: eyJhbGciOiJIUzI1NiIs...
+        type: string
+    type: object
+  handlers.SignupRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      password:
+        example: Str0ng!Pass1
+        maxLength: 72
+        minLength: 12
+        type: string
+      username:
+        example: johndoe
+        maxLength: 31
+        minLength: 3
+        type: string
+    required:
+    - email
+    - password
+    - username
+    type: object
+  handlers.TokenPairResponse:
+    properties:
+      access_token:
+        example: eyJhbGciOiJIUzI1NiIs...
+        type: string
+      refresh_token:
+        example: eyJhbGciOiJIUzI1NiIs...
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    name: API Support
+    url: https://github.com/Dharshan2208/auth
+  description: A secure authentication service with JWT-based access and refresh tokens.
+    Provides user registration, login, token refresh, logout, password change, and
+    role-based access control.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://example.com/terms
+  title: Auth Service API
+  version: 1.0.0
+paths:
+  /admin:
+    get:
+      description: Returns a welcome message for admin users. Requires the authenticated
+        user to have the "admin" role.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AdminResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Admin-only endpoint
+      tags:
+      - admin
+  /health:
+    get:
+      description: Check if the service and database are running
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.HealthResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Health check
+      tags:
+      - system
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate with username/email and password. Returns a pair of
+        access and refresh tokens on success.
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TokenPairResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Authenticate a user
+      tags:
+      - auth
+  /logout:
+    post:
+      consumes:
+      - application/json
+      description: Revoke the provided refresh token, effectively logging out the
+        session.
+      parameters:
+      - description: Refresh token to revoke
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.LogoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Logout and revoke a refresh token
+      tags:
+      - auth
+  /password/change:
+    post:
+      consumes:
+      - application/json
+      description: Change the password for the currently authenticated user. The old
+        password must be confirmed twice. On success, all other sessions are revoked
+        and the user must re-authenticate on other devices.
+      parameters:
+      - description: Password change details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change the authenticated user's password
+      tags:
+      - auth
+  /profile:
+    get:
+      description: Returns the profile information for the currently authenticated
+        user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ProfileResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get the authenticated user's profile
+      tags:
+      - user
+  /refresh:
+    post:
+      consumes:
+      - application/json
+      description: Exchange a valid refresh token for a new access token and a rotated
+        refresh token. If a refresh token is reused (i.e., the old one was already
+        rotated), all sessions for that device are revoked (token theft protection).
+      parameters:
+      - description: Current refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TokenPairResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Refresh an access token
+      tags:
+      - auth
+  /signup:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user account with username, email, and password. The
+        username and email are normalized to lowercase. Password must be 12-72 characters
+        with uppercase, lowercase, digit, and symbol.
+      parameters:
+      - description: User registration details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SignupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Register a new user
+      tags:
+      - auth
+securityDefinitions:
+  BearerAuth:
+    description: Enter the token with the `Bearer:` prefix, e.g. "Bearer abcde12345".
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

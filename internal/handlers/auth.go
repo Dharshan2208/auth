@@ -18,6 +18,17 @@ import (
 	"github.com/Dharshan2208/auth/internal/models"
 )
 
+// Signup godoc
+// @Summary Register a new user
+// @Description Create a new user account with username, email, and password. The username and email are normalized to lowercase. Password must be 12-72 characters with uppercase, lowercase, digit, and symbol.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body SignupRequest true "User registration details"
+// @Success 201 {object} MessageResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 429 {object} ErrorResponse
+// @Router /signup [post]
 func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
@@ -102,6 +113,18 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, map[string]string{"message": "user created"})
 }
 
+// Login godoc
+// @Summary Authenticate a user
+// @Description Authenticate with username/email and password. Returns a pair of access and refresh tokens on success.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body LoginRequest true "Login credentials"
+// @Success 200 {object} TokenPairResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 429 {object} ErrorResponse
+// @Router /login [post]
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Identifier string `json:"identifier"`
@@ -158,6 +181,17 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Logout godoc
+// @Summary Logout and revoke a refresh token
+// @Description Revoke the provided refresh token, effectively logging out the session.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body LogoutRequest true "Refresh token to revoke"
+// @Success 200 {object} MessageResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Router /logout [post]
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
@@ -179,6 +213,18 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]string{"message": "logged out successfully"})
 }
 
+// Refresh godoc
+// @Summary Refresh an access token
+// @Description Exchange a valid refresh token for a new access token and a rotated refresh token. If a refresh token is reused (i.e., the old one was already rotated), all sessions for that device are revoked (token theft protection).
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body RefreshTokenRequest true "Current refresh token"
+// @Success 200 {object} TokenPairResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 429 {object} ErrorResponse
+// @Router /refresh [post]
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
@@ -258,6 +304,19 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ChangePassword godoc
+// @Summary Change the authenticated user's password
+// @Description Change the password for the currently authenticated user. The old password must be confirmed twice. On success, all other sessions are revoked and the user must re-authenticate on other devices.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body ChangePasswordRequest true "Password change details"
+// @Success 200 {object} MessageResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 429 {object} ErrorResponse
+// @Router /password/change [post]
 func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value("user_id").(int)
 	if !ok || userID <= 0 {

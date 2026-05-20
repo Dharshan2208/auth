@@ -7,6 +7,16 @@ import (
 	"github.com/Dharshan2208/auth/internal/httpx"
 )
 
+// Profile godoc
+// @Summary Get the authenticated user's profile
+// @Description Returns the profile information for the currently authenticated user.
+// @Tags user
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} ProfileResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /profile [get]
 func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value("user_id").(int)
 	if !ok {
@@ -30,6 +40,16 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
+// Admin godoc
+// @Summary Admin-only endpoint
+// @Description Returns a welcome message for admin users. Requires the authenticated user to have the "admin" role.
+// @Tags admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} AdminResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Router /admin [get]
 func (h *Handler) Admin(w http.ResponseWriter, r *http.Request) {
 	role := r.Context().Value("role").(string)
 

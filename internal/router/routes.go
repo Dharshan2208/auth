@@ -4,8 +4,12 @@ import (
 	"net/http"
 	"time"
 
+	httpSwagger "github.com/swaggo/http-swagger"
+
 	"github.com/Dharshan2208/auth/internal/handlers"
 	"github.com/Dharshan2208/auth/internal/middleware"
+
+	_ "github.com/Dharshan2208/auth/docs" // swagger generated docs
 )
 
 func Register(mux *http.ServeMux, h *handlers.Handler) []*middleware.RateLimiter {
@@ -15,16 +19,20 @@ func Register(mux *http.ServeMux, h *handlers.Handler) []*middleware.RateLimiter
 	logoutLimiter := middleware.NewRateLimiter(3, time.Minute)
 	changePasswordLimiter := middleware.NewRateLimiter(3, time.Minute)
 
-	mux.HandleFunc("GET /health", h.Health)
+	// API v1 routes
+	mux.HandleFunc("GET /api/v1/health", h.Health)
 
-	mux.HandleFunc("POST /signup", signupLimiter.Limit(h.Signup))
-	mux.HandleFunc("POST /login", loginLimiter.Limit(h.Login))
-	mux.HandleFunc("POST /refresh", refreshLimiter.Limit(h.Refresh))
-	mux.HandleFunc("POST /logout", logoutLimiter.Limit(h.Logout))
+	mux.HandleFunc("POST /api/v1/signup", signupLimiter.Limit(h.Signup))
+	mux.HandleFunc("POST /api/v1/login", loginLimiter.Limit(h.Login))
+	mux.HandleFunc("POST /api/v1/refresh", refreshLimiter.Limit(h.Refresh))
+	mux.HandleFunc("POST /api/v1/logout", logoutLimiter.Limit(h.Logout))
 
-	mux.HandleFunc("GET /profile", middleware.Auth(h.Secret, h.Profile))
-	mux.HandleFunc("GET /admin", middleware.Auth(h.Secret, h.Admin))
-	mux.HandleFunc("POST /password/change", changePasswordLimiter.Limit(middleware.Auth(h.Secret, h.ChangePassword)))
+	mux.HandleFunc("GET /api/v1/profile", middleware.Auth(h.Secret, h.Profile))
+	mux.HandleFunc("GET /api/v1/admin", middleware.Auth(h.Secret, h.Admin))
+	mux.HandleFunc("POST /api/v1/password/change", changePasswordLimiter.Limit(middleware.Auth(h.Secret, h.ChangePassword)))
+
+	// Swagger documentation UI
+	mux.Handle("GET /swagger/", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
 
 	return []*middleware.RateLimiter{loginLimiter, signupLimiter, refreshLimiter, changePasswordLimiter}
 }
