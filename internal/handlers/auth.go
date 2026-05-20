@@ -258,6 +258,67 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(int)
+	if !ok || userID <= 0 {
+		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	var req struct {
+		OldPassword        string `json:"old_password"`
+		ConfirmOldPassword string `json:"confirm_old_password"`
+		NewPassword        string `json:"new_password"`
+	}
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if req.OldPassword == "" || req.ConfirmOldPassword == "" || req.NewPassword == "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing required fields"})
+		return
+	}
+	if req.OldPassword != req.ConfirmOldPassword {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "old password confirmation does not match"})
+		return
+	}
+	if req.NewPassword == req.OldPassword {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "new password must be different"})
+		return
+	}
+	if err := auth.ValidatePassword(req.NewPassword); err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	user, err := h.Store.GetUserByID(r.Context(), userID)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	if err := auth.CheckPassword(user.PasswordHash, req.OldPassword); err != nil {
+		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid creds"})
+		return
+	}
+
+	newHash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+
+	if err := h.Store.UpdateUserPasswordHash(r.Context(), userID, newHash); err != nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+
+	// Revoke refresh tokens so any other logged-in devices must re-authenticate.
+	_ = h.Store.RevokeAllSessionsForUser(r.Context(), userID)
+
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"message": "password updated"})
+}
+
 func claimUserID(claims jwt.MapClaims) (int, bool) {
 	raw, ok := claims["user_id"]
 	if !ok {

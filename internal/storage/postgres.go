@@ -203,3 +203,36 @@ func (s *Store) RevokeAllSessionsForUserDevice(ctx context.Context, userID int, 
 	)
 	return err
 }
+
+func (s *Store) RevokeAllSessionsForUser(ctx context.Context, userID int) error {
+	_, err := s.DB.Exec(
+		ctx,
+		`
+		UPDATE sessions
+		SET revoked_at = NOW()
+		WHERE user_id = $1 AND revoked_at IS NULL
+		`,
+		userID,
+	)
+	return err
+}
+
+func (s *Store) UpdateUserPasswordHash(ctx context.Context, userID int, passwordHash string) error {
+	cmd, err := s.DB.Exec(
+		ctx,
+		`
+		UPDATE users
+		SET password_hash = $2
+		WHERE id = $1
+		`,
+		userID,
+		passwordHash,
+	)
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}

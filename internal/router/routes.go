@@ -13,6 +13,7 @@ func Register(mux *http.ServeMux, h *handlers.Handler) []*middleware.RateLimiter
 	signupLimiter := middleware.NewRateLimiter(3, time.Minute)
 	refreshLimiter := middleware.NewRateLimiter(3, time.Minute)
 	logoutLimiter := middleware.NewRateLimiter(3, time.Minute)
+	changePasswordLimiter := middleware.NewRateLimiter(3, time.Minute)
 
 	mux.HandleFunc("GET /health", h.Health)
 
@@ -23,6 +24,7 @@ func Register(mux *http.ServeMux, h *handlers.Handler) []*middleware.RateLimiter
 
 	mux.HandleFunc("GET /profile", middleware.Auth(h.Secret, h.Profile))
 	mux.HandleFunc("GET /admin", middleware.Auth(h.Secret, h.Admin))
+	mux.HandleFunc("POST /password/change", changePasswordLimiter.Limit(middleware.Auth(h.Secret, h.ChangePassword)))
 
-	return []*middleware.RateLimiter{loginLimiter, signupLimiter, refreshLimiter}
+	return []*middleware.RateLimiter{loginLimiter, signupLimiter, refreshLimiter, changePasswordLimiter}
 }

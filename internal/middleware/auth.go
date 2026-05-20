@@ -46,6 +46,10 @@ func Auth(secret []byte, next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		claims := token.Claims.(jwt.MapClaims)
+		if t, ok := claims["type"].(string); ok && t == "refresh" {
+			writeUnauthorized(w, "wrong token type")
+			return
+		}
 
 		ctx := r.Context()
 		if role, ok := claims["role"]; ok {
