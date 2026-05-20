@@ -16,17 +16,26 @@ type Store struct {
 }
 
 func New(databaseURL string) (*Store, error) {
-	db, err := pgxpool.New(
+	cfg, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.MaxConns = 20
+	cfg.MinConns = 5
+	cfg.MaxConnLifetime = time.Hour
+	cfg.MaxConnIdleTime = 30 * time.Minute
+	cfg.HealthCheckPeriod = time.Minute
+
+	db, err := pgxpool.NewWithConfig(
 		context.Background(),
-		databaseURL,
+		cfg,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Store{
-		DB: db,
-	}, nil
+	return &Store{DB: db}, nil
 }
 
 func (s *Store) CreateUser(ctx context.Context, user models.User) error {
